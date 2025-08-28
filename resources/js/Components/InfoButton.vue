@@ -9,7 +9,7 @@ defineProps({
 </script>
 
 <template>
-    <Button :label="label" :icon="icon" :loading="loading" severity="secondary">
+    <Button :label="label" :icon="icon" :loading="loading" severity="info">
         <slot />
     </Button>
 </template>

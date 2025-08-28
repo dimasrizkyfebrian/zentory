@@ -1,37 +1,104 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
-import { Head, Link, useForm } from "@inertiajs/vue3";
-import {
-    PlusIcon,
-    PencilSquareIcon,
-    TrashIcon,
-} from "@heroicons/vue/24/outline";
-import Modal from "@/Components/Modal.vue";
-import { ref } from "vue";
+import { Head, Link, useForm, usePage } from "@inertiajs/vue3";
+import { ref, watch } from "vue";
 
-// Menerima props 'categories' yang dikirim dari controller
-defineProps({
+// PrimeVue & Services
+import DataTable from "primevue/datatable";
+import Column from "primevue/column";
+import { useConfirm } from "primevue/useconfirm";
+import { useAppToast } from "@/composables/useAppToast";
+import Dialog from "primevue/dialog";
+import InputText from "primevue/inputtext";
+import IconField from "primevue/iconfield";
+import InputIcon from "primevue/inputicon";
+
+// Komponen Kustom Kita
+import PrimaryButton from "@/Components/PrimaryButton.vue";
+import SecondaryButton from "@/Components/SecondaryButton.vue";
+import DangerButton from "@/Components/DangerButton.vue";
+import InfoButton from "@/Components/InfoButton.vue";
+import AppInputText from "@/Components/AppInputText.vue";
+
+// PROPS DITERIMA DARI CONTROLLER
+const props = defineProps({
     categories: Array,
 });
 
-const confirmingCategoryDeletion = ref(false);
-const form = useForm({});
-const categoryToDelete = ref(null);
+// SERVICES
+const page = usePage();
+const confirm = useConfirm();
+const { showSuccess } = useAppToast();
 
-const confirmCategoryDeletion = (category) => {
-    categoryToDelete.value = category;
-    confirmingCategoryDeletion.value = true;
+// STATE MANAGEMENT
+const form = useForm({
+    id: null,
+    name: "",
+});
+const filters = ref({
+    global: { value: null, matchMode: "contains" },
+});
+const isModalVisible = ref(false);
+const modalMode = ref("add");
+
+// LOGIC
+watch(
+    () => page.props.flash,
+    (flash) => {
+        if (flash && flash.success) {
+            showSuccess(flash.success);
+        }
+    },
+    { immediate: true }
+);
+
+const openAddModal = () => {
+    form.reset();
+    modalMode.value = "add";
+    isModalVisible.value = true;
 };
 
-const deleteCategory = () => {
-    form.delete(route("categories.destroy", categoryToDelete.value.id), {
-        onSuccess: () => closeModal(),
+const openEditModal = (category) => {
+    form.id = category.id;
+    form.name = category.name;
+    modalMode.value = "edit";
+    isModalVisible.value = true;
+};
+
+const submit = () => {
+    const onSuccess = () => {
+        isModalVisible.value = false;
+        form.reset();
+    };
+
+    if (modalMode.value === "add") {
+        form.post(route("categories.store"), {
+            preserveScroll: true,
+            onSuccess,
+        });
+    } else {
+        form.patch(route("categories.update", form.id), {
+            preserveScroll: true,
+            onSuccess,
+        });
+    }
+};
+
+const confirmDeleteCategory = (category) => {
+    confirm.require({
+        message: `Apakah Anda yakin ingin menghapus kategori "${category.name}"?`,
+        header: "Konfirmasi Penghapusan",
+        icon: "pi pi-info-circle",
+        rejectClass: "p-button-secondary p-button-outlined",
+        acceptClass: "p-button-danger",
+        acceptLabel: "Hapus",
+        rejectLabel: "Batal",
+        accept: () => {
+            form.delete(route("categories.destroy", category.id), {
+                preserveScroll: true,
+            });
+        },
     });
-};
-
-const closeModal = () => {
-    confirmingCategoryDeletion.value = false;
-    categoryToDelete.value = null;
 };
 </script>
 
@@ -44,94 +111,82 @@ const closeModal = () => {
                 <h1 class="text-3xl font-bold text-gray-800">
                     Daftar Kategori
                 </h1>
-
-                <Link
-                    :href="route('categories.create')"
-                    class="inline-flex items-center px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600"
-                >
-                    <PlusIcon class="h-5 w-5 mr-2" />
-                    Tambah Kategori
-                </Link>
+                <PrimaryButton
+                    @click="openAddModal"
+                    label="Tambah Kategori"
+                    icon="pi pi-plus"
+                />
             </div>
 
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 bg-white border-b border-gray-200">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            <tr
-                                v-for="(category, index) in categories"
-                                :key="category.id"
-                            >
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    {{ index + 1 }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    {{ category.name }}
-                                </td>
-                                <td
-                                    class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"
-                                >
-                                    <div
-                                        class="flex items-center justify-end space-x-3"
-                                    >
-                                        <Link
-                                            :href="
-                                                route(
-                                                    'categories.edit',
-                                                    category.id
-                                                )
-                                            "
-                                            class="text-primary-600 hover:text-primary-900"
-                                        >
-                                            <PencilSquareIcon class="h-5 w-5" />
-                                        </Link>
-                                        <button
-                                            @click="
-                                                confirmCategoryDeletion(
-                                                    category
-                                                )
-                                            "
-                                            class="text-red-600 hover:text-red-900"
-                                        >
-                                            <TrashIcon class="h-5 w-5" />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <DataTable
+                    :value="categories"
+                    paginator
+                    :rows="10"
+                    v-model:filters="filters"
+                    dataKey="id"
+                    :globalFilterFields="['name']"
+                >
+                    <template #header>
+                        <IconField iconPosition="left">
+                            <InputIcon class="pi pi-search" />
+                            <InputText
+                                v-model="filters['global'].value"
+                                placeholder="Cari kategori..."
+                                class="w-full md:w-auto"
+                            />
+                        </IconField>
+                    </template>
+
+                    <Column field="name" header="Name" sortable></Column>
+
+                    <Column header="Actions" style="width: 10rem">
+                        <template #body="slotProps">
+                            <div class="flex gap-2">
+                                <InfoButton
+                                    @click="openEditModal(slotProps.data)"
+                                    icon="pi pi-pencil"
+                                    v-tooltip="'Edit'"
+                                />
+                                <DangerButton
+                                    @click="
+                                        confirmDeleteCategory(slotProps.data)
+                                    "
+                                    icon="pi pi-trash"
+                                    v-tooltip="'Delete'"
+                                />
+                            </div>
+                        </template>
+                    </Column>
+                </DataTable>
             </div>
         </div>
     </AuthenticatedLayout>
 
-    <Modal :show="confirmingCategoryDeletion" @close="closeModal">
-        <div class="p-6">
-            <h2 class="text-lg font-medium text-gray-900">
-                Apakah Anda yakin ingin menghapus kategori ini?
-            </h2>
-
-            <p class="mt-1 text-sm text-gray-600">
-                Kategori "{{ categoryToDelete ? categoryToDelete.name : "" }}"
-                akan dihapus secara permanen.
-            </p>
-
-            <div class="mt-6 flex justify-end">
-                <button
-                    @click="closeModal"
-                    class="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                    Batal
-                </button>
-
-                <button
-                    @click="deleteCategory"
-                    :disabled="form.processing"
-                    class="ml-3 inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400"
-                >
-                    Hapus Kategori
-                </button>
+    <Dialog
+        v-model:visible="isModalVisible"
+        :header="modalMode === 'add' ? 'Tambah Kategori Baru' : 'Edit Kategori'"
+        modal
+        :style="{ width: '30rem' }"
+    >
+        <form @submit.prevent="submit" class="mt-4">
+            <AppInputText
+                label="Nama Kategori"
+                v-model="form.name"
+                :error="form.errors.name"
+            />
+            <div class="flex justify-end gap-2 mt-6">
+                <SecondaryButton
+                    type="button"
+                    label="Batal"
+                    @click="isModalVisible = false"
+                />
+                <PrimaryButton
+                    type="submit"
+                    :label="modalMode === 'add' ? 'Simpan' : 'Update'"
+                    :loading="form.processing"
+                />
             </div>
-        </div>
-    </Modal>
+        </form>
+    </Dialog>
 </template>

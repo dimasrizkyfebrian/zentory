@@ -10,11 +10,15 @@ import {
     BuildingOffice2Icon,
     ArchiveBoxIcon,
 } from "@heroicons/vue/24/outline";
+import ConfirmDialog from "primevue/confirmdialog";
+import Toast from "primevue/toast";
 
 const showingNavigationDropdown = ref(false);
 </script>
 
 <template>
+    <ConfirmDialog />
+    <Toast />
     <div class="h-screen flex bg-gray-100">
         <aside class="w-64 flex-shrink-0 bg-white border-r">
             <div class="h-16 flex items-center justify-center border-b">
